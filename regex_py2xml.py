@@ -1,25 +1,16 @@
 #!/usr/bin/env python
 # ======================================================================
 # Copyright (c) 2017 Cisco CVG (Cloud and Virtualization Group)
-# Jan Lindblad, jlindbla@cisco.com
 # All rights reserved.
+# See LICENSE file for licensing details
 #
-# Redistribution and use in source and binary forms are permitted
-# provided that the above copyright notice and this paragraph are
-# duplicated in all such forms and that any documentation,
-# advertising materials, and other materials related to such
-# distribution and use acknowledge that the software was developed
-# by Cisco CVG. The name of Cisco CVG may not be used to endorse 
-# or promote products derived from this software without specific
-# prior written permission.
-# THIS SOFTWARE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
-# IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
-# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+# Contributors:
+#   Jan Lindblad, jlindbla@cisco.com
 # ======================================================================
 # regex_py2xml.py
 #
 # Translator of Python Regular Expressions (the Python re module)
-# to XML Schema Regular Expressions, defined by W3C
+# to XML Schema Regular Expressions, defined by the W3C
 # (https://www.w3.org/TR/2004/REC-xmlschema-2-20041028/#regexs)
 # ======================================================================
 # TODO: The caret (^) and dollar ($) anchors are not properly
@@ -42,8 +33,11 @@ def translate(pyre):
 	return "".join(collect(sre_parse.parse(pyre)))
 
 def error(str):
-	print "*** %s" % str
+	print "*** ERROR: %s" % str
 	sys.exit(1)
+
+def warning(str):
+	print "*** Warning: %s" % str
 
 def log(str, indent=0):
 	if logging:
@@ -99,6 +93,9 @@ def generate(instr, depth):
 			fromchar, tochar = instr[1][0], instr[1][1]
 			log("range %s-%s" % (fromchar, tochar), depth)
 			return "%c-%c"%(fromchar, tochar)
+		elif 'negate' == key:
+			log("negate", depth)
+			return "^"
 		elif 'any' == key:
 			log("any", depth)
 			return "."
@@ -109,6 +106,10 @@ def generate(instr, depth):
 				return cat_dict[cat_name]
 			except:
 				error("Unhandled character category: %s" % cat_name)
+		elif 'assert_not' == key:
+			assertion = str(instr[1])
+			warning("Assertion ignored: %s" % str(assertion))
+			return ""
 
 		elif 'TOP' == key:
 			body = instr[1]
