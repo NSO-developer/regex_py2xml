@@ -11,7 +11,7 @@ import sre_parse
 from pyang import plugin
 from pyang import error
 
-clean_pattern_trace = True
+clean_pattern_trace = False
 
 def pyang_plugin_init():
     plugin.register_plugin(CleanPatternPlugin())
@@ -19,12 +19,10 @@ def pyang_plugin_init():
 class CleanPatternPlugin(plugin.PyangPlugin):
     def add_opts(self, optparser):
         optlist = [
-            optparse.make_option("--clean-pattern-target",
-                                 dest="clean_pattern_target",
-                                 help="Output file name, "\
-                                 "no repair if not specified"),
             optparse.make_option("--clean-pattern-trace",
+                                 action="store_true", 
                                  dest="clean_pattern_trace",
+                                 default=False,
                                  help="Trace regex parsing"),
             ]
         g = optparser.add_option_group("Clean-pattern output specific options")
@@ -43,6 +41,8 @@ class CleanPatternPlugin(plugin.PyangPlugin):
         emit_clean_pattern(ctx, modules, fd)
         
 def emit_clean_pattern(ctx, modules, fd):
+    global clean_pattern_trace
+    clean_pattern_trace = ctx.opts.clean_pattern_trace
     hunt_patterns(modules)
 
 def hunt_patterns(stmts):
@@ -93,7 +93,8 @@ def translate(fileline, pyre):
     while max_negative < 5:
         log("Starting tree walk with max_negative=%s"%max_negative)
         (fragments, _anchors, _hit_neg) = \
-            collect(fileline, [('TOP', (None, [parse_tree]))], max_negative=max_negative)
+            collect(fileline, [('TOP', (None, [parse_tree]))], 
+                max_negative=max_negative)
         if not fragments:
             break
         patterns += ["".join(fragments)]
@@ -113,7 +114,7 @@ def log(str, indent=0):
 
 def collect(fileline, body, depth=0, head_flex=True, tail_flex=True, max_negative=0):
     inner = []
-    head_anchor = tail_anchor = False
+    neg_hit = head_anchor = tail_anchor = False
     for index in xrange(len(body)):
         subnode = body[index]
         is_first = (0 == index)
@@ -154,7 +155,7 @@ def generate(fileline, node, depth, head_flex, tail_flex, max_negative):
                 head_flex = tail_flex = False
             (fragments, (head_anchor, tail_anchor), neg_hit) = \
                 collect(fileline, body, depth, head_flex, tail_flex, max_negative)
-            if (head_anchor or tail_anchor) and rmax > 1:
+            if (head_anchor or tail_anchor) and rmax > 1 and 0 == max_negative:
                 logwarning(fileline, "Using an anchor (^$) inside a "\
                     "repetition group which allows more than one repetition "\
                     "will probably not match what you expect. Translating "\
@@ -173,7 +174,8 @@ def generate(fileline, node, depth, head_flex, tail_flex, max_negative):
             body = node[1][1]
             log("subpattern %s" % node[1][0], depth)
             #log("aaa %s"%((head_flex, tail_flex),), depth)
-            (fragments, anchors, neg_hit) = collect(fileline, body, depth, head_flex, tail_flex, max_negative)
+            (fragments, anchors, neg_hit) = \
+                collect(fileline, body, depth, head_flex, tail_flex, max_negative)
             #log("bbb %s"%(anchors,), depth)
             if len(body) == 1 and body[0][0] != 'branch':
                 # A subpattern with a single element is redundant
@@ -202,7 +204,8 @@ def generate(fileline, node, depth, head_flex, tail_flex, max_negative):
         elif 'in' == key:
             body = node[1]
             log("in %s" % len(body), depth)
-            (fragments, anchors, neg_hit) = collect(fileline, body, depth, head_flex, tail_flex, max_negative)
+            (fragments, anchors, neg_hit) = \
+                collect(fileline, body, depth, head_flex, tail_flex, max_negative)
             if len(body) == 1 and 'category' == body[0][0]:
                 # 'in' with single category as arg can be represented 
                 # without the []
@@ -244,14 +247,16 @@ def generate(fileline, node, depth, head_flex, tail_flex, max_negative):
                 log("assert_not %s skipped in current run" % length, depth)
                 return ""
             log("assert_not %s in negative pattern" % length, depth)
-            (fragments, anchors, neg_hit) = collect(fileline, body, depth, head_flex, tail_flex, max_negative-1)
+            (fragments, anchors, neg_hit) = \
+                collect(fileline, body, depth, head_flex, tail_flex, max_negative-1)
 
             if len(body) == 1 and body[0][0] != 'branch':
                 # A subpattern with a single element is redundant
                 return ("".join(fragments), anchors, True)
             return ("".join(fragments), anchors, True)
         else:
-            logerror(fileline, "Parsing failed, unknown tuple node: %s len %s" % (node[0], len(node)))
+            logerror(fileline, "Parsing failed, unknown tuple node: %s len %s" %\
+                (node[0], len(node)))
             return "#ERROR#"
     else:
         logerror(fileline, "Parsing failed, unknown node: %s" % node)
